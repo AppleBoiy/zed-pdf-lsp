@@ -7,81 +7,92 @@ A Language Server Protocol (LSP) server that enables the [Zed editor](https://ze
 - PDF text extraction with paragraph and heading preservation
 - Multi-page PDF support with sequential page rendering
 - Error handling for corrupted, encrypted, and image-only PDFs
-- Async, non-blocking conversion
+- Async, non-blocking conversion with 10-second timeout
+- Memory limit enforcement (500MB per conversion)
 - Structured logging via `tracing`
 
 ## Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) (1.70+)
-- [Zed editor](https://zed.dev)
+- [Zed editor](https://zed.dev) (for editor integration)
 
 ## Building
 
 ```sh
-# Clone the repository
-git clone https://github.com/your-org/zed-pdf-lsp.git
-cd zed-pdf-lsp
-
-# Build in release mode
 cargo build --release
 ```
 
 The binary will be at `target/release/zed-pdf-lsp`.
 
-### Running Tests
+## Running Tests
 
 ```sh
 cargo test
 ```
 
-## Configuring Zed
+This runs 144 tests including unit tests, property-based tests (via `proptest`), integration tests, and performance benchmarks.
 
-Add the following to your Zed settings file (`~/.config/zed/settings.json` on Linux, `~/Library/Application Support/Zed/settings.json` on macOS):
+## Manual Testing
 
-```json
-{
-  "lsp": {
-    "zed-pdf-lsp": {
-      "binary": {
-        "path": "/absolute/path/to/zed-pdf-lsp/target/release/zed-pdf-lsp"
-      }
-    }
-  },
-  "file_types": {
-    "pdf": ["pdf"]
-  },
-  "languages": {
-    "pdf": {
-      "language_servers": ["zed-pdf-lsp"]
-    }
-  }
-}
+A test script is included to send raw LSP messages to the server via stdin/stdout:
+
+```sh
+chmod +x test.sh
+./test.sh
 ```
 
-Replace `/absolute/path/to/zed-pdf-lsp/target/release/zed-pdf-lsp` with the actual path to your built binary.
+This sends an initialize handshake followed by a `textDocument/didOpen` for `example.pdf`, and prints the server's JSON-RPC responses. Edit `test.sh` to change the PDF path.
+
+## Configuring Zed
+
+> **Note:** Zed requires a [language extension](https://zed.dev/docs/extensions) to register custom LSP servers. The `lsp` settings key only accepts known server names. A Zed extension for zed-pdf-lsp is planned.
+
+For now, you can test the server standalone using the `test.sh` script or by piping JSON-RPC messages directly.
 
 ## Usage
 
-1. Build the server and configure Zed as described above.
-2. Open (or restart) Zed.
-3. Open any `.pdf` file from the file tree or via the file picker.
-4. The PDF content appears as Markdown in the editor.
+1. Build the server: `cargo build --release`
+2. Run the test script: `./test.sh`
+3. The server reads `example.pdf`, converts it to Markdown, and outputs the result as JSON-RPC messages.
 
 ## How It Works
 
-The server communicates with Zed over stdin/stdout using JSON-RPC 2.0 (the LSP transport). When Zed sends a `textDocument/didOpen` notification for a `.pdf` file, the server:
+The server communicates over stdin/stdout using JSON-RPC 2.0 (the LSP transport). When it receives a `textDocument/didOpen` notification for a `.pdf` file, it:
 
 1. Reads the PDF binary from disk.
 2. Extracts text page-by-page using `pdf-extract`.
-3. Formats the text as Markdown with headings and page separators.
-4. Sends the Markdown content back to Zed.
+3. Detects headings (all-caps, numbered sections, "Chapter" prefixes).
+4. Formats the text as Markdown with headings and page separators (`---`).
+5. Sends the Markdown content back to the client.
+
+## Architecture
+
+```
+src/
+├── main.rs              # Entry point, tokio runtime, tracing setup
+├── lib.rs               # Module declarations
+├── server.rs            # LSP server core (tower-lsp LanguageServer impl)
+├── message_handler.rs   # Request/response logging, error formatting
+├── pdf_converter.rs     # PDF text extraction and Markdown conversion
+└── document_registry.rs # Thread-safe registry of open documents
+```
+
+## Error Handling
+
+The server returns Markdown-formatted error messages for:
+- File not found / not readable
+- Corrupted PDF structure
+- Encrypted/password-protected PDFs
+- Empty or image-only PDFs
+- Memory limit exceeded
+- Conversion timeout
 
 ## Logging
 
-Logs are written to stderr so they don't interfere with the JSON-RPC transport on stdout. Control the log level with the `RUST_LOG` environment variable:
+Logs are written to stderr. Control the log level with `RUST_LOG`:
 
 ```sh
-RUST_LOG=debug /path/to/zed-pdf-lsp
+RUST_LOG=debug ./target/release/zed-pdf-lsp
 ```
 
 ## License

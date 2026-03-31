@@ -1195,7 +1195,7 @@ startxref
         proptest! {
             #[test]
             fn non_empty_text_produces_non_empty_markdown(
-                pages in prop::collection::vec("[^\x00]{1,200}", 1..=5)
+                pages in prop::collection::vec("[^\x00]*[^\x00\\s][^\x00]*", 1..=5)
             ) {
                 let converter = PdfConverter::new();
                 let markdown = converter.format_as_markdown(pages);

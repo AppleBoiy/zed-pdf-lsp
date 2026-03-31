@@ -8,9 +8,10 @@ use tower_lsp::lsp_types::Url;
 use anyhow::Result;
 
 pub struct DocumentRegistry {
-    documents: Arc<RwLock<HashMap<Url, DocumentState>>>,
+    pub(crate) documents: Arc<RwLock<HashMap<Url, DocumentState>>>,
 }
 
+#[allow(dead_code)]
 pub struct DocumentState {
     pub uri: Url,
     pub opened_at: Instant,
@@ -41,11 +42,13 @@ impl DocumentRegistry {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn is_open(&self, uri: &Url) -> bool {
         let documents = self.documents.read().unwrap();
         documents.contains_key(uri)
     }
 
+    #[allow(dead_code)]
     pub fn get_all_open(&self) -> Vec<Url> {
         let documents = self.documents.read().unwrap();
         documents.keys().cloned().collect()
