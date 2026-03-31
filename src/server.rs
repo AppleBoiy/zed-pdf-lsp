@@ -1,14 +1,14 @@
 // LSP Server Core
 // This module implements the main LSP server using tower-lsp
 
-use tower_lsp::lsp_types::*;
-use tower_lsp::{Client, LanguageServer};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tower_lsp::lsp_types::*;
+use tower_lsp::{Client, LanguageServer};
 
 use crate::document_registry::DocumentRegistry;
-use crate::pdf_converter::PdfConverter;
 use crate::message_handler::MessageHandler;
+use crate::pdf_converter::PdfConverter;
 
 pub struct PdfLspServer {
     client: Client,
@@ -30,9 +30,12 @@ impl PdfLspServer {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for PdfLspServer {
-    async fn initialize(&self, _params: InitializeParams) -> tower_lsp::jsonrpc::Result<InitializeResult> {
+    async fn initialize(
+        &self,
+        _params: InitializeParams,
+    ) -> tower_lsp::jsonrpc::Result<InitializeResult> {
         tracing::info!("Initializing zed-pdf-lsp server");
-        
+
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Options(
@@ -40,7 +43,7 @@ impl LanguageServer for PdfLspServer {
                         open_close: Some(true),
                         change: Some(TextDocumentSyncKind::NONE),
                         ..Default::default()
-                    }
+                    },
                 )),
                 ..Default::default()
             },
@@ -193,7 +196,7 @@ mod tests {
     /// Returns the LspService (which must be kept alive) and a reference-
     /// counted handle so the caller can invoke LanguageServer methods.
     fn make_server() -> LspService<PdfLspServer> {
-        let (service, _socket) = LspService::new(|client| PdfLspServer::new(client));
+        let (service, _socket) = LspService::new(PdfLspServer::new);
         service
     }
 
@@ -207,7 +210,7 @@ mod tests {
                         open_close: Some(true),
                         change: Some(TextDocumentSyncKind::NONE),
                         ..Default::default()
-                    }
+                    },
                 )),
                 ..Default::default()
             },
@@ -216,13 +219,13 @@ mod tests {
                 version: Some("0.1.0".to_string()),
             }),
         };
-        
+
         // Verify server info
         assert!(result.server_info.is_some());
         let server_info = result.server_info.unwrap();
         assert_eq!(server_info.name, "zed-pdf-lsp");
         assert_eq!(server_info.version, Some("0.1.0".to_string()));
-        
+
         // Verify capabilities
         assert!(result.capabilities.text_document_sync.is_some());
     }
@@ -235,7 +238,7 @@ mod tests {
             change: Some(TextDocumentSyncKind::NONE),
             ..Default::default()
         };
-        
+
         assert_eq!(sync_options.open_close, Some(true));
         assert_eq!(sync_options.change, Some(TextDocumentSyncKind::NONE));
     }
@@ -259,14 +262,14 @@ mod tests {
                     open_close: Some(true),
                     change: Some(TextDocumentSyncKind::NONE),
                     ..Default::default()
-                }
+                },
             )),
             ..Default::default()
         };
-        
+
         // Verify text_document_sync is set
         assert!(capabilities.text_document_sync.is_some());
-        
+
         // Verify open_close is true
         if let Some(TextDocumentSyncCapability::Options(opts)) = capabilities.text_document_sync {
             assert_eq!(opts.open_close, Some(true));
@@ -284,7 +287,7 @@ mod tests {
         /// Property: "For any initialize request, the server response SHALL
         /// contain a capabilities object with textDocumentSync settings
         /// including openClose support."
-
+        ///
         /// Strategy to generate diverse InitializeParams with varying root URIs
         /// and client capabilities.
         fn initialize_params_strategy() -> impl Strategy<Value = InitializeParams> {
@@ -295,13 +298,11 @@ mod tests {
                 Just(Some(Url::parse("file:///home/user/project").unwrap())),
             ];
 
-            root_uri_strategy.prop_map(|root_uri| {
-                InitializeParams {
-                    process_id: Some(1),
-                    root_uri,
-                    capabilities: ClientCapabilities::default(),
-                    ..Default::default()
-                }
+            root_uri_strategy.prop_map(|root_uri| InitializeParams {
+                process_id: Some(1),
+                root_uri,
+                capabilities: ClientCapabilities::default(),
+                ..Default::default()
             })
         }
 
@@ -364,7 +365,7 @@ mod tests {
         /// JSON-RPC response with `"result": null`. This property test
         /// verifies the invariant holds regardless of prior server state
         /// (uninitialised, after initialize, after multiple shutdowns).
-
+        ///
         /// Strategy that produces a sequence of "warm-up" actions to put the
         /// server into different states before calling shutdown.
         #[derive(Debug, Clone)]
@@ -427,8 +428,8 @@ mod tests {
                     );
 
                     // Verify the Ok value is the unit type (null in JSON-RPC)
-                    let value = result.unwrap();
-                    prop_assert_eq!(value, (), "shutdown result must be () (null)");
+                    result.unwrap();
+                    prop_assert_eq!((), (), "shutdown result must be () (null)");
 
                     Ok(())
                 });
@@ -455,10 +456,15 @@ mod tests {
             capabilities: ClientCapabilities::default(),
             ..Default::default()
         };
-        let result = server.initialize(params).await.expect("initialize must succeed");
+        let result = server
+            .initialize(params)
+            .await
+            .expect("initialize must succeed");
 
         // Verify capabilities
-        let sync = result.capabilities.text_document_sync
+        let sync = result
+            .capabilities
+            .text_document_sync
             .expect("must include textDocumentSync");
         match sync {
             TextDocumentSyncCapability::Options(opts) => {
@@ -493,7 +499,10 @@ mod tests {
             capabilities: ClientCapabilities::default(),
             ..Default::default()
         };
-        server.initialize(params).await.expect("initialize must succeed");
+        server
+            .initialize(params)
+            .await
+            .expect("initialize must succeed");
         server.initialized(InitializedParams {}).await;
 
         // Shutdown must return Ok(())
@@ -519,7 +528,10 @@ mod tests {
             ..Default::default()
         };
         let result = server.initialize(params).await;
-        assert!(result.is_ok(), "initialize must succeed even without root_uri");
+        assert!(
+            result.is_ok(),
+            "initialize must succeed even without root_uri"
+        );
 
         let init = result.unwrap();
         assert!(init.server_info.is_some());
@@ -540,7 +552,10 @@ mod tests {
             ..Default::default()
         };
         let result = server.initialize(params).await;
-        assert!(result.is_ok(), "initialize must succeed even without process_id");
+        assert!(
+            result.is_ok(),
+            "initialize must succeed even without process_id"
+        );
     }
 
     /// Test initialize with both root_uri and process_id missing.
@@ -557,7 +572,10 @@ mod tests {
             ..Default::default()
         };
         let result = server.initialize(params).await;
-        assert!(result.is_ok(), "initialize must succeed with minimal params");
+        assert!(
+            result.is_ok(),
+            "initialize must succeed with minimal params"
+        );
 
         let init = result.unwrap();
         assert_eq!(init.server_info.as_ref().unwrap().name, "zed-pdf-lsp");
@@ -571,7 +589,10 @@ mod tests {
         let server = service.inner();
 
         let result = server.shutdown().await;
-        assert!(result.is_ok(), "shutdown must succeed even without prior initialize");
+        assert!(
+            result.is_ok(),
+            "shutdown must succeed even without prior initialize"
+        );
     }
 
     /// Test calling shutdown twice in a row.
@@ -611,14 +632,15 @@ mod tests {
         /// in the DocumentRegistry after calling did_open. The PDF files
         /// won't exist on disk so conversion will fail, but the property
         /// is about URI acceptance, not successful conversion.
-
+        ///
         /// Strategy that generates diverse file URIs ending in ".pdf".
         fn pdf_uri_strategy() -> impl Strategy<Value = Url> {
             let path_strategy = prop_oneof![
                 // Simple filenames
                 "[a-zA-Z][a-zA-Z0-9_-]{0,20}".prop_map(|name| format!("file:///{}.pdf", name)),
                 // Nested paths
-                "[a-zA-Z]{1,8}(/[a-zA-Z0-9_-]{1,12}){1,4}".prop_map(|path| format!("file:///{}.pdf", path)),
+                "[a-zA-Z]{1,8}(/[a-zA-Z0-9_-]{1,12}){1,4}"
+                    .prop_map(|path| format!("file:///{}.pdf", path)),
                 // Paths with spaces encoded as %20
                 Just("file:///my%20documents/report.pdf".to_string()),
                 // Deep nesting
@@ -683,7 +705,7 @@ mod tests {
         /// processing. Because the files don't exist on disk the
         /// pdf_converter will hit a FileNotFound error, which itself
         /// proves the server tried to read from the filesystem.
-
+        ///
         /// Strategy that generates file:// URIs with random path
         /// components, all ending in ".pdf" and pointing to paths that
         /// will not exist on disk.
@@ -691,27 +713,15 @@ mod tests {
             prop_oneof![
                 // Random filename under /tmp/zed_pbt_nonexistent
                 "[a-zA-Z][a-zA-Z0-9_]{1,16}".prop_map(|name| {
-                    Url::parse(&format!(
-                        "file:///tmp/zed_pbt_nonexistent/{}.pdf",
-                        name
-                    ))
-                    .unwrap()
+                    Url::parse(&format!("file:///tmp/zed_pbt_nonexistent/{}.pdf", name)).unwrap()
                 }),
                 // Deeper random paths
                 "[a-zA-Z]{1,6}(/[a-zA-Z0-9_]{1,8}){1,3}".prop_map(|path| {
-                    Url::parse(&format!(
-                        "file:///tmp/zed_pbt_nonexistent/{}.pdf",
-                        path
-                    ))
-                    .unwrap()
+                    Url::parse(&format!("file:///tmp/zed_pbt_nonexistent/{}.pdf", path)).unwrap()
                 }),
                 // Numeric-heavy filenames
                 "[0-9]{4}_report".prop_map(|name| {
-                    Url::parse(&format!(
-                        "file:///tmp/zed_pbt_nonexistent/{}.pdf",
-                        name
-                    ))
-                    .unwrap()
+                    Url::parse(&format!("file:///tmp/zed_pbt_nonexistent/{}.pdf", name)).unwrap()
                 }),
             ]
         }
@@ -773,26 +783,22 @@ mod tests {
         /// followed by did_close, the document is no longer present in
         /// the DocumentRegistry (is_open returns false). This proves the
         /// server released the tracked state for that document.
-
+        ///
         /// Strategy that generates diverse file:// URIs ending in ".pdf".
         fn pdf_uri_strategy() -> impl Strategy<Value = Url> {
             prop_oneof![
                 // Simple filenames
-                "[a-zA-Z][a-zA-Z0-9_-]{0,20}".prop_map(|name| {
-                    Url::parse(&format!("file:///{}.pdf", name)).unwrap()
-                }),
+                "[a-zA-Z][a-zA-Z0-9_-]{0,20}"
+                    .prop_map(|name| { Url::parse(&format!("file:///{}.pdf", name)).unwrap() }),
                 // Nested paths
-                "[a-zA-Z]{1,6}(/[a-zA-Z0-9_-]{1,10}){1,3}".prop_map(|path| {
-                    Url::parse(&format!("file:///{}.pdf", path)).unwrap()
-                }),
+                "[a-zA-Z]{1,6}(/[a-zA-Z0-9_-]{1,10}){1,3}"
+                    .prop_map(|path| { Url::parse(&format!("file:///{}.pdf", path)).unwrap() }),
                 // Paths under /tmp
-                "[a-zA-Z0-9_]{1,12}".prop_map(|name| {
-                    Url::parse(&format!("file:///tmp/{}.pdf", name)).unwrap()
-                }),
+                "[a-zA-Z0-9_]{1,12}"
+                    .prop_map(|name| { Url::parse(&format!("file:///tmp/{}.pdf", name)).unwrap() }),
                 // Deep nesting
-                "[a-z]{1,4}(/[a-z]{1,4}){3,5}".prop_map(|path| {
-                    Url::parse(&format!("file:///{}.pdf", path)).unwrap()
-                }),
+                "[a-z]{1,4}(/[a-z]{1,4}){3,5}"
+                    .prop_map(|path| { Url::parse(&format!("file:///{}.pdf", path)).unwrap() }),
             ]
         }
 
@@ -861,22 +867,18 @@ mod tests {
         /// Property: "For any document close operation, the document SHALL be
         /// removed from the registry within 100ms of receiving the didClose
         /// notification."
-
+        ///
         /// Strategy that generates diverse file:// URIs ending in ".pdf".
         fn pdf_uri_strategy() -> impl Strategy<Value = Url> {
             prop_oneof![
-                "[a-zA-Z][a-zA-Z0-9_-]{0,20}".prop_map(|name| {
-                    Url::parse(&format!("file:///{}.pdf", name)).unwrap()
-                }),
-                "[a-zA-Z]{1,6}(/[a-zA-Z0-9_-]{1,10}){1,3}".prop_map(|path| {
-                    Url::parse(&format!("file:///{}.pdf", path)).unwrap()
-                }),
-                "[a-zA-Z0-9_]{1,12}".prop_map(|name| {
-                    Url::parse(&format!("file:///tmp/{}.pdf", name)).unwrap()
-                }),
-                "[a-z]{1,4}(/[a-z]{1,4}){3,5}".prop_map(|path| {
-                    Url::parse(&format!("file:///{}.pdf", path)).unwrap()
-                }),
+                "[a-zA-Z][a-zA-Z0-9_-]{0,20}"
+                    .prop_map(|name| { Url::parse(&format!("file:///{}.pdf", name)).unwrap() }),
+                "[a-zA-Z]{1,6}(/[a-zA-Z0-9_-]{1,10}){1,3}"
+                    .prop_map(|path| { Url::parse(&format!("file:///{}.pdf", path)).unwrap() }),
+                "[a-zA-Z0-9_]{1,12}"
+                    .prop_map(|name| { Url::parse(&format!("file:///tmp/{}.pdf", name)).unwrap() }),
+                "[a-z]{1,4}(/[a-z]{1,4}){3,5}"
+                    .prop_map(|path| { Url::parse(&format!("file:///{}.pdf", path)).unwrap() }),
             ]
         }
 
@@ -956,7 +958,7 @@ mod tests {
         /// Property: "For any set of N PDF documents (where N > 1) opened
         /// simultaneously, the server SHALL successfully process and maintain
         /// state for all N documents without interference."
-
+        ///
         /// Strategy that generates a set of N unique PDF URIs (2..=10).
         fn unique_pdf_uris_strategy() -> impl Strategy<Value = Vec<Url>> {
             (2usize..=10).prop_flat_map(|n| {
@@ -1182,7 +1184,10 @@ mod tests {
         // Confirm it's registered
         {
             let registry = server.document_registry.read().await;
-            assert!(registry.is_open(&uri), "Document must be registered after didOpen");
+            assert!(
+                registry.is_open(&uri),
+                "Document must be registered after didOpen"
+            );
         }
 
         // Close the document
@@ -1230,7 +1235,11 @@ mod tests {
             assert!(registry.is_open(&uri1), "Document 1 must be registered");
             assert!(registry.is_open(&uri2), "Document 2 must be registered");
             assert!(registry.is_open(&uri3), "Document 3 must be registered");
-            assert_eq!(registry.get_all_open().len(), 3, "All 3 documents must be open");
+            assert_eq!(
+                registry.get_all_open().len(),
+                3,
+                "All 3 documents must be open"
+            );
         }
 
         // Close one document and verify the others remain
@@ -1241,10 +1250,20 @@ mod tests {
 
         {
             let registry = server.document_registry.read().await;
-            assert!(registry.is_open(&uri1), "Document 1 must still be registered");
+            assert!(
+                registry.is_open(&uri1),
+                "Document 1 must still be registered"
+            );
             assert!(!registry.is_open(&uri2), "Document 2 must be unregistered");
-            assert!(registry.is_open(&uri3), "Document 3 must still be registered");
-            assert_eq!(registry.get_all_open().len(), 2, "2 documents must remain open");
+            assert!(
+                registry.is_open(&uri3),
+                "Document 3 must still be registered"
+            );
+            assert_eq!(
+                registry.get_all_open().len(),
+                2,
+                "2 documents must remain open"
+            );
         }
     }
 
@@ -1263,7 +1282,7 @@ mod tests {
         /// 1. The InitializeResult serializes to valid JSON with expected fields
         /// 2. The serialized result can be wrapped in a JSON-RPC 2.0 response
         ///    envelope and the envelope is well-formed
-
+        ///
         /// Strategy that generates diverse InitializeParams.
         fn initialize_params_strategy() -> impl Strategy<Value = InitializeParams> {
             let process_id_strategy = prop_oneof![
@@ -1278,13 +1297,11 @@ mod tests {
                 Just(Some(Url::parse("file:///workspace").unwrap())),
             ];
 
-            (process_id_strategy, root_uri_strategy).prop_map(|(pid, root_uri)| {
-                InitializeParams {
-                    process_id: pid,
-                    root_uri,
-                    capabilities: ClientCapabilities::default(),
-                    ..Default::default()
-                }
+            (process_id_strategy, root_uri_strategy).prop_map(|(pid, root_uri)| InitializeParams {
+                process_id: pid,
+                root_uri,
+                capabilities: ClientCapabilities::default(),
+                ..Default::default()
             })
         }
 
@@ -1415,7 +1432,7 @@ mod tests {
         /// wrapped in an LSP message frame, the Content-Length value must equal
         /// the byte length of the JSON body, and the frame format must follow
         /// "Content-Length: N\r\n\r\n{json}".
-
+        ///
         /// Strategy that generates diverse InitializeParams to produce varying
         /// InitializeResult payloads.
         fn initialize_params_strategy() -> impl Strategy<Value = InitializeParams> {
@@ -1432,13 +1449,11 @@ mod tests {
                 Just(Some(Url::parse("file:///home/user/project").unwrap())),
             ];
 
-            (process_id_strategy, root_uri_strategy).prop_map(|(pid, root_uri)| {
-                InitializeParams {
-                    process_id: pid,
-                    root_uri,
-                    capabilities: ClientCapabilities::default(),
-                    ..Default::default()
-                }
+            (process_id_strategy, root_uri_strategy).prop_map(|(pid, root_uri)| InitializeParams {
+                process_id: pid,
+                root_uri,
+                capabilities: ClientCapabilities::default(),
+                ..Default::default()
             })
         }
 
@@ -1627,7 +1642,11 @@ mod tests {
         // ── Step 5: shutdown ──
         let shutdown_result = server.shutdown().await;
         assert!(shutdown_result.is_ok(), "shutdown must return Ok(())");
-        assert_eq!(shutdown_result.unwrap(), (), "shutdown result must be unit (null)");
+        assert_eq!(
+            shutdown_result.unwrap(),
+            (),
+            "shutdown result must be unit (null)"
+        );
 
         // Note: exit notification terminates the process and is handled
         // automatically by tower-lsp after shutdown (Requirement 5.6).
@@ -1647,7 +1666,10 @@ mod tests {
             capabilities: ClientCapabilities::default(),
             ..Default::default()
         };
-        server.initialize(init_params).await.expect("initialize must succeed");
+        server
+            .initialize(init_params)
+            .await
+            .expect("initialize must succeed");
         server.initialized(InitializedParams {}).await;
 
         let uri_a = Url::parse("file:///tmp/doc_a.pdf").unwrap();
@@ -1721,18 +1743,21 @@ mod tests {
             capabilities: ClientCapabilities::default(),
             ..Default::default()
         };
-        let init_result = server.initialize(params).await.expect("initialize must succeed");
+        let init_result = server
+            .initialize(params)
+            .await
+            .expect("initialize must succeed");
 
         // Serialize the result into a JSON-RPC 2.0 response envelope
-        let result_json = serde_json::to_value(&init_result)
-            .expect("InitializeResult must serialize to JSON");
+        let result_json =
+            serde_json::to_value(&init_result).expect("InitializeResult must serialize to JSON");
         let envelope = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
             "result": result_json
         });
-        let json_body = serde_json::to_string(&envelope)
-            .expect("envelope must serialize to JSON string");
+        let json_body =
+            serde_json::to_string(&envelope).expect("envelope must serialize to JSON string");
 
         // Construct the LSP message frame
         let byte_length = json_body.len();
@@ -1745,7 +1770,9 @@ mod tests {
         );
 
         // Parse the Content-Length value
-        let header_end = frame.find("\r\n\r\n").expect("frame must contain separator");
+        let header_end = frame
+            .find("\r\n\r\n")
+            .expect("frame must contain separator");
         let header_line = &frame[..header_end];
         let claimed_length: usize = header_line
             .strip_prefix("Content-Length: ")
@@ -1789,7 +1816,7 @@ mod tests {
             .await
             .unwrap();
 
-        let _ = server.shutdown().await.expect("shutdown must succeed");
+        server.shutdown().await.expect("shutdown must succeed");
 
         // Shutdown result is () which serializes to null in JSON-RPC
         let envelope = serde_json::json!({
@@ -1831,7 +1858,10 @@ mod tests {
             capabilities: ClientCapabilities::default(),
             ..Default::default()
         };
-        let init_result = server.initialize(params).await.expect("initialize must succeed");
+        let init_result = server
+            .initialize(params)
+            .await
+            .expect("initialize must succeed");
 
         let result_json = serde_json::to_value(&init_result).unwrap();
 
@@ -1887,7 +1917,7 @@ mod tests {
             .await
             .unwrap();
 
-        let _ = server.shutdown().await.expect("shutdown must succeed");
+        server.shutdown().await.expect("shutdown must succeed");
 
         let request_id = 42u64;
         let envelope = serde_json::json!({
@@ -1959,13 +1989,10 @@ mod tests {
         /// FileNotFound. The key property is that both complete
         /// concurrently — the total wall-clock time should be roughly
         /// the same as a single conversion, not 2x.
-
+        ///
         /// Strategy that generates pairs of distinct non-existent PDF URIs.
         fn pdf_uri_pair_strategy() -> impl Strategy<Value = (String, String)> {
-            (
-                "[a-zA-Z][a-zA-Z0-9_]{1,12}",
-                "[a-zA-Z][a-zA-Z0-9_]{1,12}",
-            )
+            ("[a-zA-Z][a-zA-Z0-9_]{1,12}", "[a-zA-Z][a-zA-Z0-9_]{1,12}")
                 .prop_filter("URIs must be distinct", |(a, b)| a != b)
                 .prop_map(|(a, b)| {
                     (
@@ -2047,7 +2074,7 @@ mod tests {
         /// property test verifies robustness: for any generated InitializeParams
         /// (including edge cases), the server never panics and always returns a
         /// valid InitializeResult with populated server info.
-
+        ///
         /// Strategy that generates diverse InitializeParams including edge cases
         /// such as missing process_id, various root URIs, and different client
         /// capability configurations.
@@ -2056,7 +2083,7 @@ mod tests {
                 Just(None),
                 Just(Some(0)),
                 Just(Some(1)),
-                (1u32..=u32::MAX).prop_map(|id| Some(id)),
+                (1u32..=u32::MAX).prop_map(Some),
             ];
 
             let root_uri_strategy = prop_oneof![
@@ -2064,7 +2091,9 @@ mod tests {
                 "file:///[a-zA-Z0-9/_.-]{1,60}".prop_map(|s| Some(Url::parse(&s).unwrap())),
                 Just(Some(Url::parse("file:///").unwrap())),
                 Just(Some(Url::parse("file:///a").unwrap())),
-                Just(Some(Url::parse("file:///very/deep/nested/path/to/project").unwrap())),
+                Just(Some(
+                    Url::parse("file:///very/deep/nested/path/to/project").unwrap()
+                )),
             ];
 
             (process_id_strategy, root_uri_strategy).prop_map(|(process_id, root_uri)| {

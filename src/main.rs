@@ -1,10 +1,9 @@
-mod server;
-mod message_handler;
 mod document_registry;
+mod message_handler;
 mod pdf_converter;
+mod server;
 
 use tower_lsp::{LspService, Server};
-use tracing_subscriber;
 
 use crate::server::PdfLspServer;
 
@@ -18,8 +17,8 @@ async fn main() {
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive(tracing::Level::INFO.into()),
         )
-        .with_target(true)   // Include component/module name in log output
-        .with_level(true)    // Include log level
+        .with_target(true) // Include component/module name in log output
+        .with_level(true) // Include log level
         .with_writer(std::io::stderr) // stderr so stdout stays free for JSON-RPC
         .init();
 
@@ -30,7 +29,7 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| PdfLspServer::new(client));
+    let (service, socket) = LspService::new(PdfLspServer::new);
 
     // Start LSP server with stdin/stdout transport (Requirement 5.1)
     tracing::info!("zed-pdf-lsp server listening on stdin/stdout");

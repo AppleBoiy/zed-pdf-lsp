@@ -19,22 +19,22 @@ pub struct ConversionResult {
 pub enum ConversionError {
     #[error("File not found: {0}")]
     FileNotFound(String),
-    
+
     #[error("File not readable: {0}")]
     FileNotReadable(String),
-    
+
     #[error("Corrupted PDF ({path}): {details}")]
     CorruptedPdf { path: String, details: String },
-    
+
     #[error("PDF is encrypted and requires a password: {0}")]
     EncryptedPdf(String),
-    
+
     #[error("PDF contains no extractable text: {0}")]
     EmptyPdf(String),
-    
+
     #[error("Memory limit exceeded during conversion: {0}")]
     MemoryLimitExceeded(String),
-    
+
     #[error("Conversion timed out after {timeout_secs} seconds: {path}")]
     ConversionTimeout { path: String, timeout_secs: u64 },
 }
@@ -46,14 +46,16 @@ impl ConversionError {
             ConversionError::CorruptedPdf { path: p, details } if p.is_empty() => {
                 ConversionError::CorruptedPdf { path, details }
             }
-            ConversionError::EncryptedPdf(p) if p.is_empty() => {
-                ConversionError::EncryptedPdf(path)
-            }
-            ConversionError::EmptyPdf(p) if p.is_empty() => {
-                ConversionError::EmptyPdf(path)
-            }
+            ConversionError::EncryptedPdf(p) if p.is_empty() => ConversionError::EncryptedPdf(path),
+            ConversionError::EmptyPdf(p) if p.is_empty() => ConversionError::EmptyPdf(path),
             other => other,
         }
+    }
+}
+
+impl Default for PdfConverter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -64,9 +66,12 @@ impl PdfConverter {
         }
     }
 
-    pub async fn convert_to_markdown(&self, pdf_path: &Path) -> Result<ConversionResult, ConversionError> {
+    pub async fn convert_to_markdown(
+        &self,
+        pdf_path: &Path,
+    ) -> Result<ConversionResult, ConversionError> {
         use std::time::Duration;
-        
+
         let timeout_secs = 10;
         let path_display = pdf_path.to_string_lossy().to_string();
 
@@ -172,9 +177,15 @@ impl PdfConverter {
                 if error_msg.contains("encrypt") || error_msg.contains("password") {
                     return Err(ConversionError::EncryptedPdf(String::new()));
                 } else if error_msg.contains("Invalid") || error_msg.contains("corrupt") {
-                    return Err(ConversionError::CorruptedPdf { path: String::new(), details: error_msg });
+                    return Err(ConversionError::CorruptedPdf {
+                        path: String::new(),
+                        details: error_msg,
+                    });
                 } else {
-                    return Err(ConversionError::CorruptedPdf { path: String::new(), details: format!("Failed to extract text: {}", error_msg) });
+                    return Err(ConversionError::CorruptedPdf {
+                        path: String::new(),
+                        details: format!("Failed to extract text: {}", error_msg),
+                    });
                 }
             }
             Err(_panic) => {
@@ -210,7 +221,7 @@ impl PdfConverter {
 
     fn format_as_markdown(&self, pages: Vec<String>) -> String {
         let mut markdown = String::new();
-        
+
         for (page_index, page_text) in pages.iter().enumerate() {
             // Wrap per-page formatting in catch_unwind for graceful degradation
             let page_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -233,13 +244,13 @@ impl PdfConverter {
                     ));
                 }
             }
-            
+
             // Add page separator between pages (but not after the last page)
             if page_index < pages.len() - 1 {
                 markdown.push_str("\n---\n\n");
             }
         }
-        
+
         markdown
     }
 
@@ -318,23 +329,26 @@ impl PdfConverter {
     fn detect_headings(&self, text: &str) -> Vec<(usize, String)> {
         let mut headings = Vec::new();
         let lines: Vec<&str> = text.lines().collect();
-        
+
         for (line_number, line) in lines.iter().enumerate() {
             let trimmed = line.trim();
-            
+
             // Skip empty lines
             if trimmed.is_empty() {
                 continue;
             }
-            
+
             // Heuristic 1: All-caps text (at least 3 characters, not too long)
-            let is_all_caps = trimmed.len() >= 3 
-                && trimmed.len() <= 100 
-                && trimmed.chars().filter(|c| c.is_alphabetic()).all(|c| c.is_uppercase());
-            
+            let is_all_caps = trimmed.len() >= 3
+                && trimmed.len() <= 100
+                && trimmed
+                    .chars()
+                    .filter(|c| c.is_alphabetic())
+                    .all(|c| c.is_uppercase());
+
             // Heuristic 2: Short lines (less than 60 characters)
             let is_short = trimmed.len() < 60;
-            
+
             // Heuristic 3: Common heading patterns (starts with Chapter, Section, etc.)
             let has_heading_prefix = trimmed.starts_with("Chapter ")
                 || trimmed.starts_with("Section ")
@@ -344,39 +358,44 @@ impl PdfConverter {
                 || trimmed.starts_with("Conclusion")
                 || trimmed.starts_with("Abstract")
                 || trimmed.starts_with("Summary");
-            
+
             // Heuristic 4: Numbered headings (e.g., "1. ", "1.1 ", "I. ")
             let has_numbered_prefix = {
                 let words: Vec<&str> = trimmed.split_whitespace().collect();
                 if let Some(first_word) = words.first() {
                     // Check for patterns like "1.", "1.1", "I.", "A."
-                    first_word.ends_with('.') && (
-                        first_word.chars().take_while(|c| *c != '.').all(|c| c.is_numeric() || c == '.') ||
-                        first_word.len() <= 4 && first_word.chars().take_while(|c| *c != '.').all(|c| c.is_uppercase())
-                    )
+                    first_word.ends_with('.')
+                        && (first_word
+                            .chars()
+                            .take_while(|c| *c != '.')
+                            .all(|c| c.is_numeric() || c == '.')
+                            || first_word.len() <= 4
+                                && first_word
+                                    .chars()
+                                    .take_while(|c| *c != '.')
+                                    .all(|c| c.is_uppercase()))
                 } else {
                     false
                 }
             };
-            
+
             // Heuristic 5: Doesn't end with sentence-ending punctuation (less likely to be body text)
-            let no_sentence_ending = !trimmed.ends_with('.') 
-                && !trimmed.ends_with('?') 
-                && !trimmed.ends_with('!');
-            
+            let no_sentence_ending =
+                !trimmed.ends_with('.') && !trimmed.ends_with('?') && !trimmed.ends_with('!');
+
             // Combine heuristics: if multiple indicators suggest it's a heading
-            let heading_score = (is_all_caps as u8) 
-                + (is_short as u8) 
-                + (has_heading_prefix as u8) 
-                + (has_numbered_prefix as u8) 
+            let heading_score = (is_all_caps as u8)
+                + (is_short as u8)
+                + (has_heading_prefix as u8)
+                + (has_numbered_prefix as u8)
                 + (no_sentence_ending as u8);
-            
+
             // Consider it a heading if score >= 2, or if it has a strong indicator
             if heading_score >= 2 || has_heading_prefix || (is_all_caps && is_short) {
                 headings.push((line_number, trimmed.to_string()));
             }
         }
-        
+
         headings
     }
 }
@@ -407,23 +426,41 @@ mod tests {
             path: "/path/to/file.pdf".to_string(),
             details: "Invalid PDF structure".to_string(),
         };
-        assert_eq!(err.to_string(), "Corrupted PDF (/path/to/file.pdf): Invalid PDF structure");
+        assert_eq!(
+            err.to_string(),
+            "Corrupted PDF (/path/to/file.pdf): Invalid PDF structure"
+        );
 
         // Test EncryptedPdf variant
         let err = ConversionError::EncryptedPdf("/path/to/file.pdf".to_string());
-        assert_eq!(err.to_string(), "PDF is encrypted and requires a password: /path/to/file.pdf");
+        assert_eq!(
+            err.to_string(),
+            "PDF is encrypted and requires a password: /path/to/file.pdf"
+        );
 
         // Test EmptyPdf variant
         let err = ConversionError::EmptyPdf("/path/to/file.pdf".to_string());
-        assert_eq!(err.to_string(), "PDF contains no extractable text: /path/to/file.pdf");
+        assert_eq!(
+            err.to_string(),
+            "PDF contains no extractable text: /path/to/file.pdf"
+        );
 
         // Test MemoryLimitExceeded variant
         let err = ConversionError::MemoryLimitExceeded("/path/to/file.pdf".to_string());
-        assert_eq!(err.to_string(), "Memory limit exceeded during conversion: /path/to/file.pdf");
+        assert_eq!(
+            err.to_string(),
+            "Memory limit exceeded during conversion: /path/to/file.pdf"
+        );
 
         // Test ConversionTimeout variant
-        let err = ConversionError::ConversionTimeout { path: "/path/to/file.pdf".to_string(), timeout_secs: 10 };
-        assert_eq!(err.to_string(), "Conversion timed out after 10 seconds: /path/to/file.pdf");
+        let err = ConversionError::ConversionTimeout {
+            path: "/path/to/file.pdf".to_string(),
+            timeout_secs: 10,
+        };
+        assert_eq!(
+            err.to_string(),
+            "Conversion timed out after 10 seconds: /path/to/file.pdf"
+        );
     }
 
     #[test]
@@ -444,25 +481,28 @@ mod tests {
     #[test]
     fn test_extract_text_with_empty_pdf() {
         let converter = PdfConverter::new();
-        
+
         // Create a minimal valid PDF with no text content
         let empty_pdf = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\nxref\n0 3\n0000000000 65535 f\n0000000009 00000 n\n0000000058 00000 n\ntrailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n110\n%%EOF";
-        
+
         let result = converter.extract_text(empty_pdf);
-        
+
         // Should return EmptyPdf error for PDFs with no extractable text
-        assert!(matches!(result, Err(ConversionError::EmptyPdf(_)) | Err(ConversionError::CorruptedPdf { .. })));
+        assert!(matches!(
+            result,
+            Err(ConversionError::EmptyPdf(_)) | Err(ConversionError::CorruptedPdf { .. })
+        ));
     }
 
     #[test]
     fn test_extract_text_with_corrupted_pdf() {
         let converter = PdfConverter::new();
-        
+
         // Invalid PDF data
         let corrupted_pdf = b"This is not a valid PDF file";
-        
+
         let result = converter.extract_text(corrupted_pdf);
-        
+
         // Should return CorruptedPdf error
         assert!(matches!(result, Err(ConversionError::CorruptedPdf { .. })));
     }
@@ -470,15 +510,15 @@ mod tests {
     #[test]
     fn test_extract_text_returns_vec_of_strings() {
         let converter = PdfConverter::new();
-        
+
         // For this test, we'll use a simple approach: if we can't create a valid PDF,
         // we'll just verify the function signature and error handling
         // A real PDF would require a proper PDF library to generate
-        
+
         // Test with invalid data to ensure error handling works
         let invalid_pdf = b"Not a PDF";
         let result = converter.extract_text(invalid_pdf);
-        
+
         // Should return an error for invalid PDF
         assert!(result.is_err());
     }
@@ -487,9 +527,9 @@ mod tests {
     fn test_detect_headings_all_caps() {
         let converter = PdfConverter::new();
         let text = "This is normal text.\nINTRODUCTION\nThis is more text.";
-        
+
         let headings = converter.detect_headings(text);
-        
+
         assert_eq!(headings.len(), 1);
         assert_eq!(headings[0].0, 1); // Line number
         assert_eq!(headings[0].1, "INTRODUCTION");
@@ -499,9 +539,9 @@ mod tests {
     fn test_detect_headings_with_prefix() {
         let converter = PdfConverter::new();
         let text = "Some text here.\nChapter 1: Getting Started\nMore content.";
-        
+
         let headings = converter.detect_headings(text);
-        
+
         assert_eq!(headings.len(), 1);
         assert_eq!(headings[0].0, 1);
         assert_eq!(headings[0].1, "Chapter 1: Getting Started");
@@ -511,9 +551,9 @@ mod tests {
     fn test_detect_headings_numbered() {
         let converter = PdfConverter::new();
         let text = "Introduction\n1. First Section\n2. Second Section\nBody text here.";
-        
+
         let headings = converter.detect_headings(text);
-        
+
         // Should detect "Introduction", "1. First Section", and "2. Second Section"
         assert!(headings.len() >= 2);
         assert!(headings.iter().any(|(_, h)| h.contains("First Section")));
@@ -524,9 +564,9 @@ mod tests {
     fn test_detect_headings_short_lines() {
         let converter = PdfConverter::new();
         let text = "This is a very long line that should not be detected as a heading because it exceeds the length threshold.\nShort Title\nAnother long line of text that continues for a while and should not be considered a heading.";
-        
+
         let headings = converter.detect_headings(text);
-        
+
         // "Short Title" should be detected
         assert!(headings.iter().any(|(_, h)| h == "Short Title"));
     }
@@ -535,9 +575,9 @@ mod tests {
     fn test_detect_headings_empty_text() {
         let converter = PdfConverter::new();
         let text = "";
-        
+
         let headings = converter.detect_headings(text);
-        
+
         assert_eq!(headings.len(), 0);
     }
 
@@ -545,9 +585,9 @@ mod tests {
     fn test_detect_headings_no_headings() {
         let converter = PdfConverter::new();
         let text = "This is just normal body text. It has sentences that end with periods. Nothing here looks like a heading at all.";
-        
+
         let headings = converter.detect_headings(text);
-        
+
         // Should detect no headings
         assert_eq!(headings.len(), 0);
     }
@@ -556,9 +596,9 @@ mod tests {
     fn test_detect_headings_multiple_types() {
         let converter = PdfConverter::new();
         let text = "ABSTRACT\n\nThis paper discusses...\n\nChapter 1: Introduction\n\nSome content here.\n\n1. First Point\n\nMore text.\n\nCONCLUSION\n\nFinal thoughts.";
-        
+
         let headings = converter.detect_headings(text);
-        
+
         // Should detect ABSTRACT, Chapter 1, 1. First Point, and CONCLUSION
         assert!(headings.len() >= 3);
         assert!(headings.iter().any(|(_, h)| h == "ABSTRACT"));
@@ -570,9 +610,9 @@ mod tests {
     fn test_format_as_markdown_single_page() {
         let converter = PdfConverter::new();
         let pages = vec!["This is a simple paragraph.\n\nThis is another paragraph.".to_string()];
-        
+
         let markdown = converter.format_as_markdown(pages);
-        
+
         // Should preserve paragraph structure
         assert!(markdown.contains("This is a simple paragraph."));
         assert!(markdown.contains("This is another paragraph."));
@@ -585,9 +625,9 @@ mod tests {
     fn test_format_as_markdown_with_headings() {
         let converter = PdfConverter::new();
         let pages = vec!["INTRODUCTION\n\nThis is the introduction text.\n\nChapter 1: Getting Started\n\nThis is chapter one content.".to_string()];
-        
+
         let markdown = converter.format_as_markdown(pages);
-        
+
         // Should convert headings to Markdown syntax
         assert!(markdown.contains("# INTRODUCTION"));
         assert!(markdown.contains("## Chapter 1: Getting Started"));
@@ -604,9 +644,9 @@ mod tests {
             "Page two content.\n\nMore text on page two.".to_string(),
             "Page three content.".to_string(),
         ];
-        
+
         let markdown = converter.format_as_markdown(pages);
-        
+
         // Should include all page content
         assert!(markdown.contains("Page one content."));
         assert!(markdown.contains("Page two content."));
@@ -618,10 +658,12 @@ mod tests {
     #[test]
     fn test_format_as_markdown_preserves_paragraph_structure() {
         let converter = PdfConverter::new();
-        let pages = vec!["First paragraph here.\n\nSecond paragraph here.\n\nThird paragraph here.".to_string()];
-        
+        let pages = vec![
+            "First paragraph here.\n\nSecond paragraph here.\n\nThird paragraph here.".to_string(),
+        ];
+
         let markdown = converter.format_as_markdown(pages);
-        
+
         // Should have blank lines between paragraphs
         let double_newlines = markdown.matches("\n\n").count();
         assert!(double_newlines >= 2); // At least 2 paragraph breaks
@@ -631,9 +673,9 @@ mod tests {
     fn test_format_as_markdown_empty_pages() {
         let converter = PdfConverter::new();
         let pages = vec!["".to_string()];
-        
+
         let markdown = converter.format_as_markdown(pages);
-        
+
         // Should handle empty pages gracefully
         assert_eq!(markdown.trim(), "");
     }
@@ -642,9 +684,9 @@ mod tests {
     fn test_format_as_markdown_heading_levels() {
         let converter = PdfConverter::new();
         let pages = vec!["ABSTRACT\n\nSome text.\n\n1.1 Subsection\n\nMore text.".to_string()];
-        
+
         let markdown = converter.format_as_markdown(pages);
-        
+
         // ABSTRACT should be major heading (# )
         assert!(markdown.contains("# ABSTRACT"));
         // Subsection should be minor heading (## )
@@ -655,9 +697,9 @@ mod tests {
     fn test_format_as_markdown_no_trailing_separator() {
         let converter = PdfConverter::new();
         let pages = vec!["Page 1".to_string(), "Page 2".to_string()];
-        
+
         let markdown = converter.format_as_markdown(pages);
-        
+
         // Should not end with a page separator
         assert!(!markdown.trim_end().ends_with("---"));
     }
@@ -666,9 +708,9 @@ mod tests {
     async fn test_convert_to_markdown_file_not_found() {
         let converter = PdfConverter::new();
         let path = Path::new("/nonexistent/path/to/file.pdf");
-        
+
         let result = converter.convert_to_markdown(path).await;
-        
+
         assert!(matches!(result, Err(ConversionError::FileNotFound(_))));
         if let Err(ConversionError::FileNotFound(path_str)) = result {
             assert!(path_str.contains("file.pdf"));
@@ -679,19 +721,19 @@ mod tests {
     async fn test_convert_to_markdown_measures_time() {
         use std::io::Write;
         use tempfile::NamedTempFile;
-        
+
         let converter = PdfConverter::new();
-        
+
         // Create a temporary file with minimal PDF content
         let mut temp_file = NamedTempFile::new().unwrap();
-        
+
         // Write a minimal valid PDF (this will likely fail to parse, but that's ok for this test)
         let minimal_pdf = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\nxref\n0 3\n0000000000 65535 f\n0000000009 00000 n\n0000000058 00000 n\ntrailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n110\n%%EOF";
         temp_file.write_all(minimal_pdf).unwrap();
         temp_file.flush().unwrap();
-        
+
         let result = converter.convert_to_markdown(temp_file.path()).await;
-        
+
         // The conversion will likely fail due to empty/corrupted PDF, but we're testing that
         // the method attempts to measure time and returns a result
         assert!(result.is_err());
@@ -702,12 +744,12 @@ mod tests {
         // This test verifies the structure of ConversionResult
         // We can't easily test with a real PDF without external files,
         // but we can verify the error handling works
-        
+
         let converter = PdfConverter::new();
         let path = Path::new("/tmp/nonexistent.pdf");
-        
+
         let result = converter.convert_to_markdown(path).await;
-        
+
         // Should return an error for non-existent file
         assert!(result.is_err());
     }
@@ -716,13 +758,13 @@ mod tests {
     async fn test_convert_to_markdown_with_valid_pdf() {
         use std::io::Write;
         use tempfile::NamedTempFile;
-        
+
         let converter = PdfConverter::new();
-        
+
         // Create a temporary file with a simple valid PDF containing text
         // This is a minimal PDF with actual text content
         let mut temp_file = NamedTempFile::new().unwrap();
-        
+
         // A minimal but valid PDF with text "Hello World"
         // This PDF was generated to be as simple as possible while still being valid
         let simple_pdf = b"%PDF-1.4
@@ -761,20 +803,26 @@ trailer
 startxref
 420
 %%EOF";
-        
+
         temp_file.write_all(simple_pdf).unwrap();
         temp_file.flush().unwrap();
-        
+
         let result = converter.convert_to_markdown(temp_file.path()).await;
-        
+
         // The result should be Ok with a ConversionResult
         match result {
             Ok(conversion_result) => {
                 // Verify the structure
-                assert!(!conversion_result.content.is_empty(), "Content should not be empty");
-                assert!(conversion_result.page_count > 0, "Should have at least one page");
+                assert!(
+                    !conversion_result.content.is_empty(),
+                    "Content should not be empty"
+                );
+                assert!(
+                    conversion_result.page_count > 0,
+                    "Should have at least one page"
+                );
                 // conversion_time_ms is u64, so it's always >= 0
-                
+
                 // The content should contain "Hello World" or be a valid markdown string
                 // Note: pdf-extract may or may not extract "Hello World" depending on the PDF structure
                 // At minimum, we verify we got some content back
@@ -785,7 +833,10 @@ startxref
                 // (EmptyPdf or CorruptedPdf are acceptable for this minimal PDF)
                 println!("Extraction error (acceptable for minimal PDF): {:?}", e);
                 assert!(
-                    matches!(e, ConversionError::EmptyPdf(_) | ConversionError::CorruptedPdf { .. }),
+                    matches!(
+                        e,
+                        ConversionError::EmptyPdf(_) | ConversionError::CorruptedPdf { .. }
+                    ),
                     "Error should be EmptyPdf or CorruptedPdf for minimal PDF"
                 );
             }
@@ -797,14 +848,14 @@ startxref
         // This test is platform-specific and may not work on all systems
         // We'll test the error handling logic by using a non-existent path
         // which will trigger FileNotFound rather than PermissionDenied
-        
+
         let converter = PdfConverter::new();
-        
+
         // Use a path that definitely doesn't exist
         let path = Path::new("/root/nonexistent/file.pdf");
-        
+
         let result = converter.convert_to_markdown(path).await;
-        
+
         // Should return FileNotFound or FileNotReadable
         assert!(matches!(
             result,
@@ -825,13 +876,22 @@ startxref
         temp_file.flush().unwrap();
 
         let result = converter.convert_to_markdown(temp_file.path()).await;
-        assert!(matches!(result, Err(ConversionError::MemoryLimitExceeded(_))));
+        assert!(matches!(
+            result,
+            Err(ConversionError::MemoryLimitExceeded(_))
+        ));
     }
 
     #[test]
     fn test_conversion_timeout_error_display() {
-        let err = ConversionError::ConversionTimeout { path: "/test.pdf".to_string(), timeout_secs: 10 };
-        assert_eq!(err.to_string(), "Conversion timed out after 10 seconds: /test.pdf");
+        let err = ConversionError::ConversionTimeout {
+            path: "/test.pdf".to_string(),
+            timeout_secs: 10,
+        };
+        assert_eq!(
+            err.to_string(),
+            "Conversion timed out after 10 seconds: /test.pdf"
+        );
     }
 
     #[test]
@@ -844,9 +904,14 @@ startxref
         let err = err.with_path("/doc.pdf".to_string());
         assert!(matches!(err, ConversionError::EmptyPdf(ref p) if p == "/doc.pdf"));
 
-        let err = ConversionError::CorruptedPdf { path: String::new(), details: "bad".to_string() };
+        let err = ConversionError::CorruptedPdf {
+            path: String::new(),
+            details: "bad".to_string(),
+        };
         let err = err.with_path("/doc.pdf".to_string());
-        assert!(matches!(err, ConversionError::CorruptedPdf { ref path, .. } if path == "/doc.pdf"));
+        assert!(
+            matches!(err, ConversionError::CorruptedPdf { ref path, .. } if path == "/doc.pdf")
+        );
     }
 
     #[test]
@@ -919,10 +984,16 @@ startxref
         let result = converter.convert_to_markdown(temp_file.path()).await;
         match result {
             Ok(cr) => {
-                assert_eq!(cr.page_count, 1, "Single-page PDF should yield page_count=1");
+                assert_eq!(
+                    cr.page_count, 1,
+                    "Single-page PDF should yield page_count=1"
+                );
                 assert!(!cr.content.is_empty(), "Content should not be empty");
                 // No page separators for a single page
-                assert!(!cr.content.contains("---"), "Single page should have no separator");
+                assert!(
+                    !cr.content.contains("---"),
+                    "Single page should have no separator"
+                );
             }
             Err(ConversionError::EmptyPdf(_)) | Err(ConversionError::CorruptedPdf { .. }) => {
                 // Acceptable: minimal hand-crafted PDF may not parse with pdf-extract
@@ -975,7 +1046,10 @@ startxref
 
         let result = converter.convert_to_markdown(temp_file.path()).await;
         assert!(
-            matches!(result, Err(ConversionError::EmptyPdf(_)) | Err(ConversionError::CorruptedPdf { .. })),
+            matches!(
+                result,
+                Err(ConversionError::EmptyPdf(_)) | Err(ConversionError::CorruptedPdf { .. })
+            ),
             "Empty PDF should produce EmptyPdf or CorruptedPdf error, got: {:?}",
             result
         );
@@ -1036,7 +1110,10 @@ startxref
 
         match result {
             Err(ConversionError::FileNotFound(p)) => {
-                assert!(p.contains("document.pdf"), "Error should contain the file name");
+                assert!(
+                    p.contains("document.pdf"),
+                    "Error should contain the file name"
+                );
             }
             other => panic!("Expected FileNotFound, got: {:?}", other),
         }
@@ -1068,7 +1145,9 @@ startxref
 
         let converter = PdfConverter::new();
         let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(b"RANDOM GARBAGE DATA 12345!@#$%").unwrap();
+        temp_file
+            .write_all(b"RANDOM GARBAGE DATA 12345!@#$%")
+            .unwrap();
         temp_file.flush().unwrap();
 
         let result = converter.convert_to_markdown(temp_file.path()).await;
@@ -1079,8 +1158,14 @@ startxref
             result
         );
         if let Err(ConversionError::CorruptedPdf { path, details }) = result {
-            assert!(!path.is_empty(), "CorruptedPdf error should include the file path");
-            assert!(!details.is_empty(), "CorruptedPdf error should include details");
+            assert!(
+                !path.is_empty(),
+                "CorruptedPdf error should include the file path"
+            );
+            assert!(
+                !details.is_empty(),
+                "CorruptedPdf error should include details"
+            );
         }
     }
 
@@ -1107,10 +1192,7 @@ startxref
         let result = converter.convert_to_markdown(temp_file.path()).await;
 
         // Should be EncryptedPdf or CorruptedPdf (depending on how pdf-extract reports it)
-        assert!(
-            result.is_err(),
-            "Encrypted PDF should produce an error"
-        );
+        assert!(result.is_err(), "Encrypted PDF should produce an error");
         // Verify it's one of the expected error types
         assert!(
             matches!(
@@ -1159,7 +1241,10 @@ startxref
 
         match result {
             Err(ConversionError::MemoryLimitExceeded(p)) => {
-                assert!(!p.is_empty(), "MemoryLimitExceeded should include the file path");
+                assert!(
+                    !p.is_empty(),
+                    "MemoryLimitExceeded should include the file path"
+                );
             }
             other => panic!("Expected MemoryLimitExceeded, got: {:?}", other),
         }
@@ -1422,7 +1507,8 @@ startxref
             // Each page ~4 KB of body text
             let page_size = 4096;
             let num_pages = (target_bytes / page_size).max(1);
-            let line = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor.";
+            let line =
+                "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor.";
             let lines_per_page = page_size / (line.len() + 1);
             (0..num_pages)
                 .map(|_| {
@@ -1553,7 +1639,8 @@ startxref
         }
 
         fn sample_page_text(lines: usize) -> String {
-            let line = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor.";
+            let line =
+                "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor.";
             (0..lines).map(|_| line).collect::<Vec<_>>().join("\n")
         }
 

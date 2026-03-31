@@ -9,6 +9,12 @@ pub struct MessageHandler {
     // The logger is implicit through tracing macros
 }
 
+impl Default for MessageHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MessageHandler {
     pub fn new() -> Self {
         debug!("MessageHandler initialized");
@@ -52,7 +58,11 @@ impl MessageHandler {
                 )
             }
             ConversionError::CorruptedPdf { path, details } => {
-                let file_display = if path.is_empty() { "(PDF file)".to_string() } else { path };
+                let file_display = if path.is_empty() {
+                    "(PDF file)".to_string()
+                } else {
+                    path
+                };
                 format!(
                     "# Error: Corrupted PDF\n\n\
                     **File**: {}\n\n\
@@ -62,7 +72,11 @@ impl MessageHandler {
                 )
             }
             ConversionError::EncryptedPdf(path) => {
-                let file_display = if path.is_empty() { "(PDF file)".to_string() } else { path };
+                let file_display = if path.is_empty() {
+                    "(PDF file)".to_string()
+                } else {
+                    path
+                };
                 format!(
                     "# Error: Encrypted PDF\n\n\
                     **File**: {}\n\n\
@@ -72,7 +86,11 @@ impl MessageHandler {
                 )
             }
             ConversionError::EmptyPdf(path) => {
-                let file_display = if path.is_empty() { "(PDF file)".to_string() } else { path };
+                let file_display = if path.is_empty() {
+                    "(PDF file)".to_string()
+                } else {
+                    path
+                };
                 format!(
                     "# Error: Empty PDF\n\n\
                     **File**: {}\n\n\
@@ -82,7 +100,11 @@ impl MessageHandler {
                 )
             }
             ConversionError::MemoryLimitExceeded(path) => {
-                let file_display = if path.is_empty() { "(PDF file)".to_string() } else { path };
+                let file_display = if path.is_empty() {
+                    "(PDF file)".to_string()
+                } else {
+                    path
+                };
                 format!(
                     "# Error: Memory Limit Exceeded\n\n\
                     **File**: {}\n\n\
@@ -92,7 +114,11 @@ impl MessageHandler {
                 )
             }
             ConversionError::ConversionTimeout { path, timeout_secs } => {
-                let file_display = if path.is_empty() { "(PDF file)".to_string() } else { path };
+                let file_display = if path.is_empty() {
+                    "(PDF file)".to_string()
+                } else {
+                    path
+                };
                 format!(
                     "# Error: Conversion Timed Out\n\n\
                     **File**: {}\n\n\
@@ -126,7 +152,7 @@ mod tests {
                 "uri": "file:///test.pdf"
             }
         });
-        
+
         // Should not panic and should log at debug level
         handler.log_request("textDocument/didOpen", &params);
     }
@@ -169,7 +195,7 @@ mod tests {
                 }
             }
         });
-        
+
         // Should not panic and should log at debug level
         handler.log_response("initialize", &result);
     }
@@ -178,7 +204,7 @@ mod tests {
     fn test_log_response_with_null_result() {
         let handler = MessageHandler::new();
         let result = json!(null);
-        
+
         // Should handle null result gracefully
         handler.log_response("shutdown", &result);
     }
@@ -203,7 +229,7 @@ mod tests {
     fn test_log_request_with_empty_params() {
         let handler = MessageHandler::new();
         let params = json!({});
-        
+
         // Should handle empty params gracefully
         handler.log_request("shutdown", &params);
     }
@@ -212,9 +238,9 @@ mod tests {
     fn test_format_error_response_file_not_found() {
         let handler = MessageHandler::new();
         let error = ConversionError::FileNotFound("/path/to/missing.pdf".to_string());
-        
+
         let markdown = handler.format_error_response(error);
-        
+
         // Should contain error heading
         assert!(markdown.contains("# Error: File Not Found"));
         // Should contain file path
@@ -230,9 +256,9 @@ mod tests {
     fn test_format_error_response_file_not_readable() {
         let handler = MessageHandler::new();
         let error = ConversionError::FileNotReadable("/path/to/locked.pdf".to_string());
-        
+
         let markdown = handler.format_error_response(error);
-        
+
         // Should contain error heading
         assert!(markdown.contains("# Error: File Not Readable"));
         // Should contain file path
@@ -251,9 +277,9 @@ mod tests {
             path: "/path/to/corrupted.pdf".to_string(),
             details: "Invalid PDF header".to_string(),
         };
-        
+
         let markdown = handler.format_error_response(error);
-        
+
         // Should contain error heading
         assert!(markdown.contains("# Error: Corrupted PDF"));
         // Should contain file path
@@ -269,9 +295,9 @@ mod tests {
     fn test_format_error_response_encrypted_pdf() {
         let handler = MessageHandler::new();
         let error = ConversionError::EncryptedPdf("/path/to/encrypted.pdf".to_string());
-        
+
         let markdown = handler.format_error_response(error);
-        
+
         // Should contain error heading
         assert!(markdown.contains("# Error: Encrypted PDF"));
         // Should contain file path
@@ -287,9 +313,9 @@ mod tests {
     fn test_format_error_response_empty_pdf() {
         let handler = MessageHandler::new();
         let error = ConversionError::EmptyPdf("/path/to/empty.pdf".to_string());
-        
+
         let markdown = handler.format_error_response(error);
-        
+
         // Should contain error heading
         assert!(markdown.contains("# Error: Empty PDF"));
         // Should contain file path
@@ -305,9 +331,9 @@ mod tests {
     fn test_format_error_response_memory_limit_exceeded() {
         let handler = MessageHandler::new();
         let error = ConversionError::MemoryLimitExceeded("/path/to/large.pdf".to_string());
-        
+
         let markdown = handler.format_error_response(error);
-        
+
         // Should contain error heading
         assert!(markdown.contains("# Error: Memory Limit Exceeded"));
         // Should contain file path
@@ -326,9 +352,9 @@ mod tests {
             path: "/path/to/slow.pdf".to_string(),
             timeout_secs: 10,
         };
-        
+
         let markdown = handler.format_error_response(error);
-        
+
         assert!(markdown.contains("# Error: Conversion Timed Out"));
         assert!(markdown.contains("**File**: /path/to/slow.pdf"));
         assert!(markdown.contains("10 seconds"));
@@ -337,21 +363,27 @@ mod tests {
     #[test]
     fn test_format_error_response_returns_valid_markdown() {
         let handler = MessageHandler::new();
-        
+
         // Test all error variants return non-empty strings
         let errors: Vec<ConversionError> = vec![
             ConversionError::FileNotFound("/test.pdf".to_string()),
             ConversionError::FileNotReadable("/test.pdf".to_string()),
-            ConversionError::CorruptedPdf { path: "/test.pdf".to_string(), details: "test error".to_string() },
+            ConversionError::CorruptedPdf {
+                path: "/test.pdf".to_string(),
+                details: "test error".to_string(),
+            },
             ConversionError::EncryptedPdf("/test.pdf".to_string()),
             ConversionError::EmptyPdf("/test.pdf".to_string()),
             ConversionError::MemoryLimitExceeded("/test.pdf".to_string()),
-            ConversionError::ConversionTimeout { path: "/test.pdf".to_string(), timeout_secs: 10 },
+            ConversionError::ConversionTimeout {
+                path: "/test.pdf".to_string(),
+                timeout_secs: 10,
+            },
         ];
-        
+
         for error in errors {
             let markdown = handler.format_error_response(error);
-            
+
             // Should not be empty
             assert!(!markdown.is_empty());
             // Should start with markdown heading
@@ -366,9 +398,9 @@ mod tests {
     fn test_format_error_response_markdown_structure() {
         let handler = MessageHandler::new();
         let error = ConversionError::FileNotFound("/test.pdf".to_string());
-        
+
         let markdown = handler.format_error_response(error);
-        
+
         // Should have proper markdown structure with blank lines
         assert!(markdown.contains("\n\n"));
         // Should have heading at the start
@@ -434,9 +466,21 @@ mod tests {
                     &json!({"textDocument": {"uri": "file:///test.pdf"}}),
                 );
             });
-            assert!(output.contains("DEBUG"), "log_request must emit at DEBUG level, got: {}", output);
-            assert!(output.contains("textDocument/didOpen"), "log must contain method name, got: {}", output);
-            assert!(output.contains("Received LSP request"), "log must contain request message, got: {}", output);
+            assert!(
+                output.contains("DEBUG"),
+                "log_request must emit at DEBUG level, got: {}",
+                output
+            );
+            assert!(
+                output.contains("textDocument/didOpen"),
+                "log must contain method name, got: {}",
+                output
+            );
+            assert!(
+                output.contains("Received LSP request"),
+                "log must contain request message, got: {}",
+                output
+            );
         }
 
         #[test]
@@ -445,8 +489,14 @@ mod tests {
                 let handler = MessageHandler::new();
                 handler.log_request("initialize", &json!({"capabilities": {}}));
             });
-            assert!(output.contains("DEBUG"), "log_request must emit at DEBUG level");
-            assert!(output.contains("initialize"), "log must contain method name 'initialize'");
+            assert!(
+                output.contains("DEBUG"),
+                "log_request must emit at DEBUG level"
+            );
+            assert!(
+                output.contains("initialize"),
+                "log must contain method name 'initialize'"
+            );
         }
 
         #[test]
@@ -455,8 +505,14 @@ mod tests {
                 let handler = MessageHandler::new();
                 handler.log_request("shutdown", &json!({}));
             });
-            assert!(output.contains("DEBUG"), "log_request must emit at DEBUG level");
-            assert!(output.contains("shutdown"), "log must contain method name 'shutdown'");
+            assert!(
+                output.contains("DEBUG"),
+                "log_request must emit at DEBUG level"
+            );
+            assert!(
+                output.contains("shutdown"),
+                "log must contain method name 'shutdown'"
+            );
         }
 
         // Requirement 6.5: log_response produces DEBUG level output containing the method name
@@ -469,9 +525,21 @@ mod tests {
                     &json!({"capabilities": {"textDocumentSync": {"openClose": true}}}),
                 );
             });
-            assert!(output.contains("DEBUG"), "log_response must emit at DEBUG level, got: {}", output);
-            assert!(output.contains("initialize"), "log must contain method name, got: {}", output);
-            assert!(output.contains("Sending LSP response"), "log must contain response message, got: {}", output);
+            assert!(
+                output.contains("DEBUG"),
+                "log_response must emit at DEBUG level, got: {}",
+                output
+            );
+            assert!(
+                output.contains("initialize"),
+                "log must contain method name, got: {}",
+                output
+            );
+            assert!(
+                output.contains("Sending LSP response"),
+                "log must contain response message, got: {}",
+                output
+            );
         }
 
         #[test]
@@ -483,8 +551,14 @@ mod tests {
                     &json!({"status": "success", "pages": 3}),
                 );
             });
-            assert!(output.contains("DEBUG"), "log_response must emit at DEBUG level");
-            assert!(output.contains("textDocument/didOpen"), "log must contain method name");
+            assert!(
+                output.contains("DEBUG"),
+                "log_response must emit at DEBUG level"
+            );
+            assert!(
+                output.contains("textDocument/didOpen"),
+                "log must contain method name"
+            );
         }
 
         #[test]
@@ -493,56 +567,85 @@ mod tests {
                 let handler = MessageHandler::new();
                 handler.log_response("shutdown", &json!(null));
             });
-            assert!(output.contains("DEBUG"), "log_response must emit at DEBUG level");
-            assert!(output.contains("shutdown"), "log must contain method name 'shutdown'");
+            assert!(
+                output.contains("DEBUG"),
+                "log_response must emit at DEBUG level"
+            );
+            assert!(
+                output.contains("shutdown"),
+                "log must contain method name 'shutdown'"
+            );
         }
 
         // Requirement 6.1: error formatting includes document URI and error details
         #[test]
         fn format_error_includes_uri_for_file_not_found() {
             let handler = MessageHandler::new();
-            let output = handler.format_error_response(
-                ConversionError::FileNotFound("/home/user/docs/report.pdf".to_string()),
+            let output = handler.format_error_response(ConversionError::FileNotFound(
+                "/home/user/docs/report.pdf".to_string(),
+            ));
+            assert!(
+                output.contains("/home/user/docs/report.pdf"),
+                "error must include document URI"
             );
-            assert!(output.contains("/home/user/docs/report.pdf"), "error must include document URI");
-            assert!(output.contains("**Reason**:"), "error must include error details");
-            assert!(output.contains("does not exist"), "error must describe the problem");
+            assert!(
+                output.contains("**Reason**:"),
+                "error must include error details"
+            );
+            assert!(
+                output.contains("does not exist"),
+                "error must describe the problem"
+            );
         }
 
         #[test]
         fn format_error_includes_uri_for_corrupted_pdf() {
             let handler = MessageHandler::new();
-            let output = handler.format_error_response(
-                ConversionError::CorruptedPdf {
-                    path: "/data/broken.pdf".to_string(),
-                    details: "Invalid cross-reference table".to_string(),
-                },
+            let output = handler.format_error_response(ConversionError::CorruptedPdf {
+                path: "/data/broken.pdf".to_string(),
+                details: "Invalid cross-reference table".to_string(),
+            });
+            assert!(
+                output.contains("/data/broken.pdf"),
+                "error must include document URI"
             );
-            assert!(output.contains("/data/broken.pdf"), "error must include document URI");
-            assert!(output.contains("Invalid cross-reference table"), "error must include specific details");
+            assert!(
+                output.contains("Invalid cross-reference table"),
+                "error must include specific details"
+            );
         }
 
         #[test]
         fn format_error_includes_uri_for_encrypted_pdf() {
             let handler = MessageHandler::new();
-            let output = handler.format_error_response(
-                ConversionError::EncryptedPdf("/secure/secret.pdf".to_string()),
+            let output = handler.format_error_response(ConversionError::EncryptedPdf(
+                "/secure/secret.pdf".to_string(),
+            ));
+            assert!(
+                output.contains("/secure/secret.pdf"),
+                "error must include document URI"
             );
-            assert!(output.contains("/secure/secret.pdf"), "error must include document URI");
-            assert!(output.contains("encrypted"), "error must describe encryption issue");
+            assert!(
+                output.contains("encrypted"),
+                "error must describe encryption issue"
+            );
         }
 
         #[test]
         fn format_error_includes_uri_for_timeout() {
             let handler = MessageHandler::new();
-            let output = handler.format_error_response(
-                ConversionError::ConversionTimeout {
-                    path: "/large/huge.pdf".to_string(),
-                    timeout_secs: 10,
-                },
+            let output = handler.format_error_response(ConversionError::ConversionTimeout {
+                path: "/large/huge.pdf".to_string(),
+                timeout_secs: 10,
+            });
+            assert!(
+                output.contains("/large/huge.pdf"),
+                "error must include document URI"
             );
-            assert!(output.contains("/large/huge.pdf"), "error must include document URI");
-            assert!(output.contains("10 seconds"), "error must include timeout details");
+            assert!(
+                output.contains("10 seconds"),
+                "error must include timeout details"
+            );
         }
 
         // Verify log levels: DEBUG for messages, DEBUG for MessageHandler::new()
@@ -551,8 +654,15 @@ mod tests {
             let output = with_captured_logs(|| {
                 let _handler = MessageHandler::new();
             });
-            assert!(output.contains("DEBUG"), "MessageHandler::new() must emit at DEBUG level, got: {}", output);
-            assert!(output.contains("MessageHandler initialized"), "must log initialization message");
+            assert!(
+                output.contains("DEBUG"),
+                "MessageHandler::new() must emit at DEBUG level, got: {}",
+                output
+            );
+            assert!(
+                output.contains("MessageHandler initialized"),
+                "must log initialization message"
+            );
         }
 
         #[test]
@@ -568,8 +678,16 @@ mod tests {
                 .collect();
             assert!(!request_lines.is_empty(), "must have request log line");
             for line in &request_lines {
-                assert!(line.contains("DEBUG"), "request log must be DEBUG, not ERROR/INFO: {}", line);
-                assert!(!line.contains("ERROR"), "request log must not be ERROR: {}", line);
+                assert!(
+                    line.contains("DEBUG"),
+                    "request log must be DEBUG, not ERROR/INFO: {}",
+                    line
+                );
+                assert!(
+                    !line.contains("ERROR"),
+                    "request log must not be ERROR: {}",
+                    line
+                );
             }
         }
 
@@ -585,8 +703,16 @@ mod tests {
                 .collect();
             assert!(!response_lines.is_empty(), "must have response log line");
             for line in &response_lines {
-                assert!(line.contains("DEBUG"), "response log must be DEBUG, not ERROR/INFO: {}", line);
-                assert!(!line.contains("ERROR"), "response log must not be ERROR: {}", line);
+                assert!(
+                    line.contains("DEBUG"),
+                    "response log must be DEBUG, not ERROR/INFO: {}",
+                    line
+                );
+                assert!(
+                    !line.contains("ERROR"),
+                    "response log must not be ERROR: {}",
+                    line
+                );
             }
         }
     }
@@ -614,7 +740,13 @@ mod tests {
                 }),
                 ("/[a-zA-Z0-9/_.-]{1,40}\\.pdf", details_strategy).prop_map(|(p, d)| {
                     let path = p.clone();
-                    (ConversionError::CorruptedPdf { path: p, details: d }, path)
+                    (
+                        ConversionError::CorruptedPdf {
+                            path: p,
+                            details: d,
+                        },
+                        path,
+                    )
                 }),
                 "/[a-zA-Z0-9/_.-]{1,40}\\.pdf".prop_map(|p: String| {
                     let path = p.clone();
@@ -630,7 +762,13 @@ mod tests {
                 }),
                 ("/[a-zA-Z0-9/_.-]{1,40}\\.pdf", 1u64..3600).prop_map(|(p, t)| {
                     let path = p.clone();
-                    (ConversionError::ConversionTimeout { path: p, timeout_secs: t }, path)
+                    (
+                        ConversionError::ConversionTimeout {
+                            path: p,
+                            timeout_secs: t,
+                        },
+                        path,
+                    )
                 }),
             ]
         }
@@ -812,13 +950,19 @@ mod tests {
             prop_oneof![
                 path_strategy.prop_map(ConversionError::FileNotFound),
                 path_strategy.prop_map(ConversionError::FileNotReadable),
-                (path_strategy, details_strategy)
-                    .prop_map(|(p, d)| ConversionError::CorruptedPdf { path: p, details: d }),
+                (path_strategy, details_strategy).prop_map(|(p, d)| {
+                    ConversionError::CorruptedPdf {
+                        path: p,
+                        details: d,
+                    }
+                }),
                 path_strategy.prop_map(ConversionError::EncryptedPdf),
                 path_strategy.prop_map(ConversionError::EmptyPdf),
                 path_strategy.prop_map(ConversionError::MemoryLimitExceeded),
-                (path_strategy, 1u64..3600)
-                    .prop_map(|(p, t)| ConversionError::ConversionTimeout { path: p, timeout_secs: t }),
+                (path_strategy, 1u64..3600).prop_map(|(p, t)| ConversionError::ConversionTimeout {
+                    path: p,
+                    timeout_secs: t
+                }),
             ]
         }
 

@@ -1,11 +1,11 @@
 // Document Registry
 // This module maintains a registry of currently open PDF documents
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use tower_lsp::lsp_types::Url;
-use anyhow::Result;
 
 pub struct DocumentRegistry {
     pub(crate) documents: Arc<RwLock<HashMap<Url, DocumentState>>>,
@@ -16,6 +16,12 @@ pub struct DocumentState {
     pub uri: Url,
     pub opened_at: Instant,
     pub content_hash: Option<u64>,
+}
+
+impl Default for DocumentRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DocumentRegistry {
@@ -70,7 +76,7 @@ mod tests {
     fn test_register_document() {
         let registry = DocumentRegistry::new();
         let uri = Url::from_str("file:///test.pdf").unwrap();
-        
+
         let result = registry.register(uri.clone());
         assert!(result.is_ok());
         assert!(registry.is_open(&uri));
@@ -80,10 +86,10 @@ mod tests {
     fn test_unregister_document() {
         let registry = DocumentRegistry::new();
         let uri = Url::from_str("file:///test.pdf").unwrap();
-        
+
         registry.register(uri.clone()).unwrap();
         assert!(registry.is_open(&uri));
-        
+
         let result = registry.unregister(&uri);
         assert!(result.is_ok());
         assert!(!registry.is_open(&uri));
@@ -93,7 +99,7 @@ mod tests {
     fn test_is_open_returns_false_for_unregistered() {
         let registry = DocumentRegistry::new();
         let uri = Url::from_str("file:///test.pdf").unwrap();
-        
+
         assert!(!registry.is_open(&uri));
     }
 
@@ -103,11 +109,11 @@ mod tests {
         let uri1 = Url::from_str("file:///test1.pdf").unwrap();
         let uri2 = Url::from_str("file:///test2.pdf").unwrap();
         let uri3 = Url::from_str("file:///test3.pdf").unwrap();
-        
+
         registry.register(uri1.clone()).unwrap();
         registry.register(uri2.clone()).unwrap();
         registry.register(uri3.clone()).unwrap();
-        
+
         let all_open = registry.get_all_open();
         assert_eq!(all_open.len(), 3);
         assert!(all_open.contains(&uri1));
@@ -120,14 +126,14 @@ mod tests {
         let registry = DocumentRegistry::new();
         let uri1 = Url::from_str("file:///doc1.pdf").unwrap();
         let uri2 = Url::from_str("file:///doc2.pdf").unwrap();
-        
+
         registry.register(uri1.clone()).unwrap();
         registry.register(uri2.clone()).unwrap();
-        
+
         assert!(registry.is_open(&uri1));
         assert!(registry.is_open(&uri2));
         assert_eq!(registry.get_all_open().len(), 2);
-        
+
         registry.unregister(&uri1).unwrap();
         assert!(!registry.is_open(&uri1));
         assert!(registry.is_open(&uri2));
@@ -138,18 +144,18 @@ mod tests {
     fn test_document_state_fields() {
         let registry = DocumentRegistry::new();
         let uri = Url::from_str("file:///test.pdf").unwrap();
-        
+
         let before = Instant::now();
         registry.register(uri.clone()).unwrap();
         let after = Instant::now();
-        
+
         // Verify the document is registered
         assert!(registry.is_open(&uri));
-        
+
         // Access the document state to verify fields
         let documents = registry.documents.read().unwrap();
         let state = documents.get(&uri).unwrap();
-        
+
         assert_eq!(state.uri, uri);
         assert!(state.opened_at >= before && state.opened_at <= after);
         assert_eq!(state.content_hash, None);
@@ -158,23 +164,23 @@ mod tests {
     #[test]
     fn test_thread_safety() {
         use std::thread;
-        
+
         let registry = DocumentRegistry::new();
         let registry_clone = DocumentRegistry {
             documents: Arc::clone(&registry.documents),
         };
-        
+
         let uri1 = Url::from_str("file:///thread1.pdf").unwrap();
         let uri2 = Url::from_str("file:///thread2.pdf").unwrap();
-        
+
         let handle1 = thread::spawn(move || {
             registry.register(uri1).unwrap();
         });
-        
+
         let handle2 = thread::spawn(move || {
             registry_clone.register(uri2).unwrap();
         });
-        
+
         handle1.join().unwrap();
         handle2.join().unwrap();
     }
@@ -328,11 +334,9 @@ mod tests {
                     thread::spawn(move || {
                         let reg = DocumentRegistry { documents: docs };
                         for i in 0..ops_per_thread {
-                            let uri = Url::from_str(&format!(
-                                "file:///concurrent/t{}_doc{}.pdf",
-                                t, i
-                            ))
-                            .unwrap();
+                            let uri =
+                                Url::from_str(&format!("file:///concurrent/t{}_doc{}.pdf", t, i))
+                                    .unwrap();
                             reg.register(uri.clone()).unwrap();
                             let _ = reg.is_open(&uri);
                             reg.unregister(&uri).unwrap();
