@@ -1,0 +1,27 @@
+[package]
+name = "zed-pdf-lsp"
+version = "0.1.0"
+edition = "2021"
+authors = ["AppleBoiy"]
+description = "Language Server Protocol server for viewing PDF files in Zed editor"
+license = "MIT"
+
+[dependencies]
+tower-lsp = "0.20"
+tokio = { version = "1.41", features = ["full"] }
+pdf-extract = "0.7"
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1.0"
+thiserror = "2.0"
+
+[dev-dependencies]
+proptest = "1.6"
+tokio-test = "0.4"
+tempfile = "3.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
